@@ -1,0 +1,29 @@
+[Unit]
+Description=BedJet Controller — Raspberry Pi BLE bridge
+# Wait for both network and Bluetooth to be ready before starting
+After=network-online.target bluetooth.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/BedJetController/pi
+
+# Set your BedJet's Bluetooth MAC address here.
+# Find it by running: python3 -c "import asyncio; from bleak import BleakScanner; asyncio.run(BleakScanner.discover())"
+Environment=BEDJET_MAC=XX:XX:XX:XX:XX:XX
+
+# Use the Python from the virtual environment, not the system Python.
+# Update this path if your venv is in a different location.
+ExecStart=/home/pi/BedJetController/pi/venv/bin/python main.py
+
+# Restart automatically if the process crashes
+Restart=on-failure
+RestartSec=5
+
+# Log to the systemd journal (view with: journalctl -u bedjet -f)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
