@@ -1,0 +1,524 @@
+# BedJet Controller — Complete Setup Guide
+
+From unboxing a Raspberry Pi Zero 2 W to a working two-phone BedJet controller.
+
+---
+
+## What You Need to Buy
+
+**Raspberry Pi Zero 2 W** (~$15)
+The specific model matters. The original Pi Zero and Zero W do not have enough
+processing power for this project and use classic Bluetooth, not Bluetooth Low
+Energy (BLE). You need the Zero 2 W.
+
+**MicroSD card** (~$8–12)
+16GB minimum. 32GB is fine. Any reputable brand works (Samsung, SanDisk).
+Do not use a cheap no-name card — corrupted SD cards are the most common
+reason Pi projects fail mysteriously.
+
+**USB-C power supply** (~$10)
+The Pi Zero 2 W uses a micro-USB port for power (not USB-C — the Zero 2 W
+still uses micro-USB despite newer Pi models switching). You need at least
+2.5A output. An old Android phone charger with a micro-USB cable works fine.
+
+**MicroSD card reader** (~$8)
+Unless your computer already has a built-in slot. You need this to flash the
+operating system onto the card.
+
+That's it. Total cost is typically $40–50 if you don't already have any of these.
+You do NOT need a monitor, keyboard, or mouse — everything is done over WiFi
+via SSH (remote command line).
+
+---
+
+## Part 1: Flash the Operating System
+
+The Pi doesn't come with an OS. You install one onto the SD card from your
+regular computer.
+
+**Step 1 — Download Raspberry Pi Imager**
+
+Go to raspberrypi.com/software and download the Raspberry Pi Imager for your
+computer (Windows, Mac, or Linux versions available). Install it and open it.
+
+**Step 2 — Insert the SD card into your computer**
+
+Put the SD card into your card reader and plug it into your computer.
+
+**Step 3 — Choose the OS and target**
+
+In Raspberry Pi Imager:
+- Click "Choose Device" → select "Raspberry Pi Zero 2 W"
+- Click "Choose OS" → "Raspberry Pi OS (other)" → "Raspberry Pi OS Lite (32-bit)"
+  - Choose the LITE version — it has no desktop interface, which is fine since
+    we never plug in a monitor
+- Click "Choose Storage" → select your SD card
+
+**Step 4 — Configure WiFi and SSH before flashing**
+
+This is the most important step. Before you click Write, click the settings
+gear icon (or when prompted "Would you like to apply OS customisation settings?"
+click Edit Settings). Fill in:
+
+  Hostname:       bedjet    (this lets you find the Pi on the network)
+  Username:       pi
+  Password:       (choose something — you'll type this when SSHing in)
+  WiFi SSID:      (your home WiFi network name, exactly as it appears)
+  WiFi Password:  (your WiFi password)
+  WiFi Country:   US  (or your country)
+
+Then go to the Services tab and enable SSH. Save these settings.
+
+**Step 5 — Flash the card**
+
+Click Write. It will download Raspberry Pi OS, write it to the SD card, and
+verify it. This takes 5–10 minutes. When it finishes, eject the card.
+
+---
+
+## Part 2: First Boot and SSH Connection
+
+**Step 1 — Insert the SD card and power on the Pi**
+
+Put the flashed SD card into the Pi's micro-SD slot (the card slot on the
+underside of the board). Plug in the micro-USB power cable. A small green LED
+should flicker — this means it's booting.
+
+Wait 60–90 seconds for the first boot. The first boot takes longer than normal
+because it expands the filesystem to fill the SD card.
+
+**Step 2 — Find the Pi on your network**
+
+From your regular computer, open a terminal (Mac/Linux) or PowerShell (Windows)
+and try connecting by hostname:
+
+    ssh pi@bedjet.local
+
+If that doesn't work (some networks block mDNS), you need to find the Pi's IP
+address. Log into your home router's admin page (usually 192.168.1.1 or
+192.168.0.1) and look for a device named "bedjet" in the connected devices list.
+Then connect with:
+
+    ssh pi@<IP_ADDRESS>
+
+When prompted "Are you sure you want to continue connecting?" type yes.
+Enter the password you set in Step 4 of Part 1.
+
+You should now see a command prompt that looks like:
+    pi@bedjet:~ $
+
+You're now controlling the Pi remotely. Everything from here is typed at this
+SSH prompt.
+
+---
+
+## Part 3: Install System Dependencies
+
+Run these commands one at a time at the SSH prompt. Wait for each to finish
+before running the next.
+
+**Update the system first:**
+
+    sudo apt update
+    sudo apt upgrade -y
+
+This might take a few minutes.
+
+**Install Bluetooth tools and Python:**
+
+    sudo apt install -y python3-pip python3-venv bluetooth bluez
+
+**Verify Bluetooth is working:**
+
+    sudo systemctl status bluetooth
+
+You should see "active (running)" in green. If it shows inactive, run:
+
+    sudo systemctl enable bluetooth
+    sudo systemctl start bluetooth
+
+---
+
+## Part 4: Get the Code onto the Pi
+
+**Install git (if not already installed):**
+
+    sudo apt install -y git
+
+**Clone the repository:**
+
+    cd ~
+    git clone https://github.com/KrispyMemes/BedJetController.git
+    cd BedJetController
+
+**Set up the Python virtual environment:**
+
+A virtual environment is a self-contained Python installation just for this
+project. This keeps the project's libraries from conflicting with anything else
+on the Pi.
+
+    cd pi
+    python3 -m venv venv
+
+This creates a folder called "venv" inside the pi/ directory.
+
+**Activate the virtual environment:**
+
+    source venv/bin/activate
+
+Your prompt will change to show "(venv)" at the start. You need to do this
+every time you log in and want to run the server manually. The systemd service
+does this automatically when it runs at boot.
+
+**Install the Python dependencies:**
+
+    pip install -r requirements.txt
+
+This installs: bleak (BLE library), FastAPI (web server), uvicorn (runs
+FastAPI), and python-dotenv (reads settings from a file). Takes 2–3 minutes.
+
+---
+
+## Part 5: Find Your BedJet's Bluetooth Address
+
+Every Bluetooth device has a unique hardware address — a string that looks like
+AA:BB:CC:DD:EE:FF. You need to find your BedJet's address so the Pi knows which
+device to connect to.
+
+**Make sure the BedJet is plugged in and turned on** (not just in standby).
+
+**Run the scanner** (make sure your venv is still active):
+
+    python3 -c "
+    import asyncio
+    from bleak import BleakScanner
+
+    async def scan():
+        print('Scanning for 10 seconds...')
+        devices = await BleakScanner.discover(timeout=10)
+        for d in devices:
+            print(f'{d.address}  {d.name}')
+
+    asyncio.run(scan())
+    "
+
+After 10 seconds, it will print a list of every Bluetooth device nearby. Look
+for one named "BedJet V3" or something similar. The address is the
+AA:BB:CC:DD:EE:FF string to the left of the name.
+
+**Write down or copy this address.** You'll need it in the next step.
+
+If you don't see any BedJet in the list:
+- Make sure the BedJet is powered on (not just plugged in — press the button)
+- Make sure no other device (phone, tablet) is currently connected to it via
+  Bluetooth — the BedJet only allows one connection at a time
+- Try standing the Pi closer to the BedJet and scanning again
+
+---
+
+## Part 6: Test the Server Manually
+
+Before setting up auto-start, test that the server actually works by running it
+manually.
+
+**Set your BedJet MAC address** (replace XX:XX:XX:XX:XX:XX with your real address):
+
+    export BEDJET_MAC="XX:XX:XX:XX:XX:XX"
+
+**Start the server:**
+
+    python3 main.py
+
+You should see output like:
+
+    INFO:     Started server process
+    INFO:     Waiting for application startup.
+    INFO:     Starting BedJet server (BedJet MAC: AA:BB:CC:DD:EE:FF)
+    INFO:     BLE connection task started
+    INFO:     Application startup complete.
+    INFO:     Uvicorn running on http://0.0.0.0:8000
+    INFO:     Connecting to BedJet at AA:BB:CC:DD:EE:FF...
+    INFO:     Connected to BedJet at AA:BB:CC:DD:EE:FF
+
+**Find the Pi's IP address** (open a second terminal window for this):
+
+    hostname -I
+
+Note the first IP address shown (e.g. 192.168.1.47).
+
+**Test the HTTP API from your computer** (open a terminal on your regular
+computer, not the Pi):
+
+    curl http://192.168.1.47:8000/status
+
+You should get a JSON response showing the BedJet's current state, like:
+
+    {"connected":true,"mode":0,"mode_name":"Standby","actual_temp_f":72,...}
+
+**Test a command:**
+
+    curl -X POST http://192.168.1.47:8000/command/mode \
+      -H "Content-Type: application/json" \
+      -d '{"mode": 4}'
+
+The BedJet should switch to Cool mode. If it does, everything is working.
+
+**Stop the manual server** by pressing Ctrl+C in the SSH window where it's running.
+
+---
+
+## Part 7: Verify the Mode Button IDs
+
+The BedJet's protocol uses numeric "button IDs" to change modes. These values
+were determined by reverse-engineering the BedJet Android app and may need to
+be verified against your specific unit.
+
+After getting the server running in the previous step, test each mode:
+
+    # Heat
+    curl -X POST http://192.168.1.47:8000/command/mode -H "Content-Type: application/json" -d '{"mode": 1}'
+
+    # Turbo
+    curl -X POST http://192.168.1.47:8000/command/mode -H "Content-Type: application/json" -d '{"mode": 2}'
+
+    # Extended Heat
+    curl -X POST http://192.168.1.47:8000/command/mode -H "Content-Type: application/json" -d '{"mode": 3}'
+
+    # Cool
+    curl -X POST http://192.168.1.47:8000/command/mode -H "Content-Type: application/json" -d '{"mode": 4}'
+
+    # Dry
+    curl -X POST http://192.168.1.47:8000/command/mode -H "Content-Type: application/json" -d '{"mode": 5}'
+
+    # Standby (off)
+    curl -X POST http://192.168.1.47:8000/command/off
+
+Watch the BedJet after each command. If a mode doesn't activate, the button ID
+for that mode may need to be corrected.
+
+To fix a button ID, open pi/bedjet_ble.py on the Pi:
+
+    nano ~/BedJetController/pi/bedjet_ble.py
+
+Find the MODE_BUTTON_IDS section (around line 61) and adjust the hex values.
+Save with Ctrl+O, exit with Ctrl+X.
+
+The correct button IDs for your BedJet can also be found by watching the raw
+BLE traffic with a Bluetooth sniffer app (like "BLE Scanner" on iOS/Android)
+while pressing buttons in the official BedJet app.
+
+---
+
+## Part 8: Set Up Auto-Start on Boot
+
+Once the server works manually, set it up to start automatically every time the
+Pi boots — so you never have to SSH in just to start it.
+
+**Edit the service file** to fill in your real MAC address and file paths:
+
+    nano ~/BedJetController/pi/bedjet.service
+
+Find this line and replace the placeholder with your BedJet's MAC address:
+
+    Environment=BEDJET_MAC=XX:XX:XX:XX:XX:XX
+
+The file already has the correct path for a user named "pi". If your username
+is different, update the User=, WorkingDirectory=, and ExecStart= lines.
+
+Save with Ctrl+O, then Ctrl+X.
+
+**Install the service:**
+
+    sudo cp ~/BedJetController/pi/bedjet.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable bedjet
+    sudo systemctl start bedjet
+
+**Check that it started successfully:**
+
+    sudo systemctl status bedjet
+
+You should see "active (running)" in green. If it shows "failed", view the logs:
+
+    journalctl -u bedjet -n 50
+
+The most common issues are:
+- Wrong MAC address
+- The venv path is wrong (check the ExecStart= line)
+- Bluetooth hasn't finished starting when the service runs
+  (fix: add "After=bluetooth.target" — already in the file, but sometimes
+  a 5-second ExecStartPre=/bin/sleep 5 is needed on slower cards)
+
+**Test that auto-start works** by rebooting:
+
+    sudo reboot
+
+Wait 60 seconds, then test from your computer:
+
+    curl http://192.168.1.47:8000/status
+
+If you get a response, the Pi is running the server automatically on boot.
+
+---
+
+## Part 9: Set Up the Mobile App
+
+Do this part on your regular computer (Mac or Windows), not the Pi.
+
+**Install Node.js**
+
+Download and install Node.js from nodejs.org. Choose the LTS (Long Term
+Support) version. This includes npm, which you need to install the app's
+libraries.
+
+**Install the Expo Go app on your phone**
+
+In the App Store (iPhone) or Google Play Store (Android), search for "Expo Go"
+and install it. This is how you run the app without building a full installable
+.ipa or .apk file.
+
+**Install the app dependencies**
+
+Open a terminal on your computer, navigate to where you cloned the repository,
+and run:
+
+    cd BedJetController/app
+    npm install
+
+This downloads all the JavaScript libraries listed in package.json. Takes
+1–2 minutes.
+
+**Set the Pi's IP address in the code**
+
+Open app/services/api.js in any text editor. Find this line near the top:
+
+    let PI_BASE_URL = 'http://192.168.1.100:8000';
+
+Change 192.168.1.100 to your Pi's actual IP address. Save the file.
+
+Open app/services/socket.js and find:
+
+    let socketUrl = 'ws://192.168.1.100:8000/ws';
+
+Change 192.168.1.100 to your Pi's actual IP address. Save the file.
+
+(Later, you can update these via the Settings screen in the app — but setting
+them in code first makes the first launch work without any configuration.)
+
+**Start the Expo development server:**
+
+    npx expo start
+
+A QR code will appear in the terminal.
+
+**Open the app on your phone:**
+
+- iPhone: Open the Camera app and point it at the QR code. A banner will
+  appear — tap it to open in Expo Go.
+- Android: Open the Expo Go app, tap "Scan QR code", and scan the code.
+
+The app will load on your phone. If the Pi is running and connected to the
+BedJet, you should see the status appear within a second or two.
+
+**To use both phones simultaneously:**
+
+Repeat the "Open the app on your phone" step on the second phone. Both phones
+can be open at the same time — changes made on one phone will appear on the
+other within 1–2 seconds via the WebSocket update.
+
+---
+
+## Part 10: Ongoing Use
+
+**Daily use**
+
+The Pi handles everything automatically. Once it's set up:
+- Plug the Pi into power
+- Wait 60 seconds
+- Open the Expo Go app on either phone and the app will connect
+
+You don't need to do anything else. The Pi connects to BedJet via Bluetooth
+automatically and serves both phones simultaneously.
+
+**If something stops working**
+
+Check the Pi logs from your computer (you'll need to SSH in):
+
+    ssh pi@bedjet.local
+    journalctl -u bedjet -f
+
+This shows live logs. Look for error messages. Common issues:
+
+- "Cannot connect to BedJet" — BedJet might be unplugged or out of Bluetooth
+  range. The Pi will keep retrying automatically.
+- App shows "Not Connected" — Pi might be restarting or the WiFi dropped.
+  Wait 30 seconds and try again. Check that Pi is on same WiFi network.
+- Commands don't work — BedJet might have a Bluetooth connection from another
+  device. The BedJet only allows one BLE connection. Make sure no phone is
+  directly connected via the official BedJet app.
+
+**After changing the Pi's code**
+
+If you edit any Python files, restart the service:
+
+    ssh pi@bedjet.local
+    sudo systemctl restart bedjet
+
+**After git pull (updating to new code)**
+
+    ssh pi@bedjet.local
+    cd ~/BedJetController
+    git pull
+    sudo systemctl restart bedjet
+
+---
+
+## Quick Reference
+
+**Pi commands**
+
+    ssh pi@bedjet.local                    # Connect to the Pi
+    sudo systemctl status bedjet           # Is the server running?
+    sudo systemctl restart bedjet          # Restart after code changes
+    sudo systemctl stop bedjet             # Stop the server
+    journalctl -u bedjet -f                # Watch live logs
+    journalctl -u bedjet --since today     # Today's logs
+
+**Test the API directly**
+
+Replace 192.168.1.47 with your Pi's IP:
+
+    curl http://192.168.1.47:8000/status
+    curl http://192.168.1.47:8000/health
+    curl -X POST http://192.168.1.47:8000/command/off
+    curl -X POST http://192.168.1.47:8000/command/mode \
+      -H "Content-Type: application/json" -d '{"mode": 4}'
+    curl -X POST http://192.168.1.47:8000/command/temperature \
+      -H "Content-Type: application/json" -d '{"temp_f": 72}'
+    curl -X POST http://192.168.1.47:8000/command/fan \
+      -H "Content-Type: application/json" -d '{"step": 10}'
+
+**Watch the live status stream** (requires wscat: npm install -g wscat):
+
+    wscat -c ws://192.168.1.47:8000/ws
+
+**View the auto-generated API docs** (in a browser):
+
+    http://192.168.1.47:8000/docs
+
+---
+
+## Hardware Notes
+
+The Pi Zero 2 W has no built-in case. If you want to protect it, basic cases
+are available on Amazon for $5–10. Since the Pi lives plugged into the wall
+near the BedJet, a case isn't strictly necessary but protects against dust.
+
+Bluetooth range from the Pi to the BedJet should be at least 30 feet (10
+meters) through typical bedroom walls. If you experience frequent disconnects,
+try placing the Pi closer to the BedJet. A short (1-meter) USB extension cable
+can help position the Pi without moving the power outlet.
+
+The Pi Zero 2 W runs warm under load. This is normal. The metal SoC package
+on the top of the board may get hot to the touch — this is expected and not
+a problem for typical use.
