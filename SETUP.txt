@@ -157,7 +157,7 @@ A virtual environment is a self-contained Python installation just for this
 project. This keeps the project's libraries from conflicting with anything else
 on the Pi.
 
-    cd pi
+    cd ~/BedJetController/pi
     python3 -m venv venv
 
 This creates a folder called "venv" inside the pi/ directory.
