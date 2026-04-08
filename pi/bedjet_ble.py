@@ -49,17 +49,16 @@ MODE_NAMES = {
 # ---------------------------------------------------------------------------
 # Button IDs for mode changes (sent as [0x01, BUTTON_ID])
 #
-# TODO: These values are placeholders based on the reverse-engineered protocol
-# and must be verified against a real BedJet device during Phase 1 testing.
-# If a mode command doesn't work, check these values first.
+# These values are from the official BedJet V3 Android app (decompiled source).
+# Reference: https://github.com/markus1189/bedjet-re
 # ---------------------------------------------------------------------------
 MODE_BUTTON_IDS = {
-    MODE_STANDBY:       0x06,
-    MODE_HEAT:          0x14,
+    MODE_STANDBY:       0x01,
+    MODE_HEAT:          0x03,
     MODE_TURBO:         0x04,
-    MODE_EXTENDED_HEAT: 0x0C,
+    MODE_EXTENDED_HEAT: 0x06,
     MODE_COOL:          0x02,
-    MODE_DRY:           0x03,
+    MODE_DRY:           0x05,
     MODE_WAIT:          0x07,
 }
 
