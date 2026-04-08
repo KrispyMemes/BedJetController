@@ -4,15 +4,17 @@
 
 A custom BedJet V3 climate controller with two parts:
 
-1. **Raspberry Pi backend** — maintains the single BLE connection to the BedJet and exposes a WiFi API
-2. **React Native mobile app** — both phones use this to control the BedJet
+1. **Raspberry Pi backend** — maintains the single BLE connection to the BedJet and exposes a WiFi API + serves web UI
+2. **Web app** — both phones access via browser on the same WiFi network
 
 ```
 Phone 1 (Doug)    ──┐
-                    ├──► Raspberry Pi (FastAPI + WebSocket) ──BLE──► BedJet V3
+                    ├──► Raspberry Pi (FastAPI + WebSocket + Static Web) ──BLE──► BedJet V3
 Phone 2 (Leanna)  ──┘
-     (local WiFi)                                      (Bluetooth Low Energy)
+  (browser)        http://PI_IP:8000                  (Bluetooth Low Energy)
 ```
+
+**Why web instead of React Native/Expo?** Simpler architecture, no app install needed, works on any browser, avoids native module compatibility issues.
 
 ---
 
@@ -78,27 +80,19 @@ Valid range: **66°F – 104°F** (33°C – 40°C)
 ```
 BedJetController/
 ├── CLAUDE.md                  # This file
-├── pi/                        # Raspberry Pi backend
-│   ├── main.py                # Entry point — starts API server
+├── pi/                        # Raspberry Pi backend (FastAPI)
+│   ├── main.py                # Entry point — starts API + serves static web
 │   ├── bedjet_ble.py          # BLE connection + command layer
 │   ├── api.py                 # FastAPI HTTP and WebSocket routes
-│   ├── websocket_manager.py   # Broadcasts live status to phones
+│   ├── websocket_manager.py   # Broadcasts live status to clients
 │   ├── requirements.txt       # Python dependencies
-│   └── bedjet.service         # systemd service for auto-start on boot
-└── app/                       # React Native mobile app (Expo)
-    ├── App.js                 # Root component, navigation, WS init
-    ├── store.js               # Zustand state store
-    ├── screens/
-    │   ├── HomeScreen.js      # Main control panel
-    │   └── SettingsScreen.js  # Pi IP config
-    ├── components/
-    │   ├── ModeSelector.js    # Mode buttons
-    │   ├── FanSlider.js       # Fan speed slider
-    │   ├── TempControl.js     # Temperature +/–
-    │   └── StatusBar.js       # Live status readout
-    └── services/
-        ├── api.js             # HTTP calls to Pi
-        └── socket.js          # WebSocket connection
+│   ├── bedjet.service         # systemd service for auto-start on boot
+│   └── static/                # Static web files (served by FastAPI)
+│       ├── index.html         # Main HTML page
+│       ├── app.js             # React app (or vanilla JS)
+│       ├── styles.css         # Styling
+│       └── socket-client.js   # WebSocket connection logic
+└── app/                       # (DEPRECATED: was React Native/Expo, pivoted to web)
 ```
 
 ---
@@ -193,16 +187,28 @@ http://PI_IP:8000/docs
 
 ---
 
-## Mobile App Setup
+## Web App Setup
 
+The web UI is served directly from the Raspberry Pi. No separate build step needed for basic version.
+
+### Option 1: Simple HTML/CSS/JavaScript (Recommended for simplicity)
+1. Create `pi/static/index.html` with a form-based interface
+2. The Pi's FastAPI serves it at `http://PI_IP:8000/`
+3. On your phone, navigate to that URL in any browser
+
+### Option 2: React-based Web App (if reusing existing React code)
 ```bash
-cd app
+# On your development machine (not the Pi)
+cd web
 npm install
-npx expo start
-# Scan the QR code with the Expo Go app on your phone
+npm run build
+# Copy build output to pi/static/
 ```
 
-Before first run, open `app/services/api.js` and set `PI_BASE_URL` to your Pi's IP address.
+Both phones access the app the same way:
+- Open browser → `http://PI_IP:8000/`
+- Bookmark or add to home screen for quick access
+- WebSocket connection happens automatically in the browser
 
 ---
 
@@ -214,24 +220,31 @@ Before first run, open `app/services/api.js` and set `PI_BASE_URL` to your Pi's 
 - [x] WebSocket status broadcast (`websocket_manager.py`)
 - [x] systemd service for auto-start (`bedjet.service`)
 
-### Phase 2 — Mobile App Shell ✅
+### Phase 2 — React Native/Expo App (DEPRECATED ⚠️)
 - [x] Settings screen (enter Pi IP)
 - [x] Live WebSocket status display
 - [x] Power on/off
 - [x] Mode selection
 - [x] Fan speed slider
 - [x] Temperature control
+- ⚠️ **PIVOTED TO WEB**: React Native SDK version conflicts made Expo Go unusable on physical iOS devices. Switching to browser-based web app for simplicity.
 
-### Phase 3 — Polish (TODO)
-- [ ] mDNS auto-discovery (no manual IP entry)
+### Phase 3 — Web App (NEW) ⏳
+- [ ] Static web UI served from Pi (`pi/static/index.html`)
+- [ ] Control panel (mode, temp, fan, timer)
+- [ ] Live WebSocket status display
+- [ ] Responsive design (mobile + desktop)
+- [ ] Power on/off, mode selection, temp/fan control
+
+### Phase 4 — Polish (TODO)
+- [ ] mDNS auto-discovery (easy URL like `http://bedjet.local`)
 - [ ] Scheduling / timer UI
 - [ ] Graceful error screens when Pi is offline
 - [ ] Pi auto-starts on boot and auto-reconnects to BedJet
 
-### Phase 4 — Optional / Future
+### Phase 5 — Optional / Future
 - [ ] Remote access via Tailscale
 - [ ] Scheduled temperature sequences (biorhythm)
-- [ ] Phone home screen widget
 - [ ] Dual-zone support (two BedJets)
 
 ---
