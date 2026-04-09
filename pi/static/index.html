@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>BedJet Controller</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">BedJet</h1>
+      <div id="conn-indicator" class="conn-indicator disconnected">
+        <span class="conn-dot"></span>
+        <span id="conn-text">Connecting…</span>
+      </div>
+    </header>
+
+    <!-- Status Card -->
+    <section class="card status-card">
+      <div class="temp-row">
+        <div class="temp-block">
+          <span class="temp-label">Actual</span>
+          <span class="temp-value" id="actual-temp">--°</span>
+        </div>
+        <div id="mode-badge" class="mode-badge">--</div>
+        <div class="temp-block">
+          <span class="temp-label">Set</span>
+          <span class="temp-value" id="set-temp">--°</span>
+        </div>
+      </div>
+      <div class="stats-row">
+        <span id="fan-stat" class="stat">Fan: --%</span>
+        <span class="stat-sep">·</span>
+        <span id="timer-stat" class="stat">Timer: --:--</span>
+      </div>
+    </section>
+
+    <!-- Mode Buttons -->
+    <section class="card">
+      <h2 class="card-title">Mode</h2>
+      <div class="mode-grid" id="mode-grid">
+        <button class="mode-btn" data-mode="0" onclick="setMode(0)">
+          <span class="mode-icon">◯</span>Off
+        </button>
+        <button class="mode-btn" data-mode="1" onclick="setMode(1)">
+          <span class="mode-icon">♨</span>Heat
+        </button>
+        <button class="mode-btn" data-mode="2" onclick="setMode(2)">
+          <span class="mode-icon">▲</span>Turbo
+        </button>
+        <button class="mode-btn" data-mode="3" onclick="setMode(3)">
+          <span class="mode-icon">≋</span>Ext Heat
+        </button>
+        <button class="mode-btn" data-mode="4" onclick="setMode(4)">
+          <span class="mode-icon">❄</span>Cool
+        </button>
+        <button class="mode-btn" data-mode="5" onclick="setMode(5)">
+          <span class="mode-icon">~</span>Dry
+        </button>
+      </div>
+    </section>
+
+    <!-- Temperature Control -->
+    <section class="card">
+      <h2 class="card-title">Temperature</h2>
+      <div class="adj-control">
+        <button class="adj-btn" onclick="adjustTemp(-1)" aria-label="Decrease temperature">−</button>
+        <div class="adj-display">
+          <span id="target-temp">--°F</span>
+        </div>
+        <button class="adj-btn" onclick="adjustTemp(1)" aria-label="Increase temperature">+</button>
+      </div>
+      <p class="range-hint">Range: 66°F – 104°F</p>
+    </section>
+
+    <!-- Fan Speed -->
+    <section class="card">
+      <h2 class="card-title">Fan Speed <span id="fan-pct-label" class="card-title-sub">--%</span></h2>
+      <div class="slider-row">
+        <span class="slider-label">5%</span>
+        <input type="range" id="fan-slider" class="slider" min="0" max="19" step="1" value="9"
+               oninput="onFanInput(this.value)" onchange="sendFan(this.value)">
+        <span class="slider-label">100%</span>
+      </div>
+    </section>
+
+    <!-- Timer -->
+    <section class="card">
+      <h2 class="card-title">Auto-Off Timer</h2>
+      <div class="timer-control">
+        <div class="timer-field">
+          <input type="number" id="timer-hours" class="timer-input" min="0" max="9" value="0">
+          <span class="timer-unit">hr</span>
+        </div>
+        <span class="timer-sep">:</span>
+        <div class="timer-field">
+          <input type="number" id="timer-minutes" class="timer-input" min="0" max="59" value="30">
+          <span class="timer-unit">min</span>
+        </div>
+        <button class="set-btn" onclick="setTimer()">Set</button>
+      </div>
+    </section>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast" role="alert"></div>
+
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

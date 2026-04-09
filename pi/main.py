@@ -26,6 +26,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from api import router
 from bedjet_ble import BedJetBLE
@@ -123,6 +124,11 @@ app = FastAPI(
 
 # Register all the API routes defined in api.py
 app.include_router(router)
+
+# Serve the web UI from pi/static/. This must come AFTER all API routes so
+# the StaticFiles catch-all doesn't shadow /status, /command/*, /ws, etc.
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
 
 
 # ---------------------------------------------------------------------------
